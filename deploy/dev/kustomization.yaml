@@ -1,0 +1,13 @@
+resources:
+  - release-dev.yaml
+  - service-account.yaml
+  - role.yaml
+  - role-binding.yaml
+  
+
+
+configMapGenerator:
+  - name: myapp-config
+    literals:
+      - DATABASE_URL=postgres://dev_user:dev_pass@dev-db:5432/people
+      - NODE_ENV=dev

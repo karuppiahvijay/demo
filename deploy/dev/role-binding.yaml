@@ -1,0 +1,13 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: dev-deployment-binding
+  namespace: dev
+subjects:
+- kind: ServiceAccount
+  name: cicd-service-account
+  namespace: dev
+roleRef:
+  kind: Role
+  name: dev-deployment-role
+  apiGroup: rbac.authorization.k8s.io

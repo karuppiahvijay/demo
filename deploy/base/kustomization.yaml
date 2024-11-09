@@ -1,0 +1,3 @@
+resources:
+  - helm-output/rendered-dev.yaml
+  - helm-output/rendered-staging.yaml
