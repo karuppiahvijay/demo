@@ -1,0 +1,114 @@
+name: CD
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to (dev or staging)'
+        required: true
+        default: dev
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get Version
+        id: version
+        run: |
+          echo "VERSION=v$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+
+      - name: Set Environment
+        run: echo "ENV=${{ github.event.inputs.environment }}" >> $GITHUB_ENV
+
+      - name: Print Environment Variables
+        run: env
+
+      - name: Verify dev release file exists
+        run: ls -al deploy/dev/
+
+      - name: Verify staging release file exists
+        run: ls -al deploy/staging/
+
+      - name: Check release-dev.yaml before update
+        run: cat deploy/dev/release-dev.yaml
+        if: env.ENV == 'dev'
+
+      - name: Check release-staging.yaml before update
+        run: cat deploy/staging/release-staging.yaml
+        if: env.ENV == 'staging'
+
+      # Apply RBAC configuration
+      - name: Apply RBAC Configuration for Dev
+        if: env.ENV == 'dev'
+        run: |
+          kubectl apply -k deploy/rbac/dev
+
+      - name: Apply RBAC Configuration for Staging
+        if: env.ENV == 'staging'
+        run: |
+          kubectl apply -k deploy/rbac/staging
+
+      - name: Update deploy Values
+        run: |
+          cd deploy
+          if [ "${{ env.ENV }}" == "dev" ]; then
+             yq eval ".backend.image.tag = \"${{ env.VERSION }}\"" -i dev/release-dev.yaml
+             yq eval ".frontend.image.tag = \"${{ env.VERSION }}\"" -i dev/release-dev.yaml
+             kustomize build dev | kubectl apply -f -
+             kubectl apply -k /mnt/d/test/minikubetest/deploy/dev
+             elif [ "${{ env.ENV }}" == "staging" ]; then
+             yq eval ".backend.image.tag = \"${{ env.VERSION }}\"" -i staging/release-staging.yaml
+             yq eval ".frontend.image.tag = \"${{ env.VERSION }}\"" -i staging/release-staging.yaml
+             kustomize build staging | kubectl apply -f -
+             kubectl apply -k /mnt/d/test/minikubetest/deploy/staging
+              fi
+
+
+      - name: Check release-dev.yaml after update
+        run: cat deploy/dev/release-dev.yaml
+        if: env.ENV == 'dev'
+
+      - name: Check release-staging.yaml after update
+        run: cat deploy/staging/release-staging.yaml
+        if: env.ENV == 'staging'
+
+      - name: Show Kustomize Output (Dev)
+        if: env.ENV == 'dev'
+        run: kustomize build deploy/dev
+
+      - name: Show Kustomize Output (Staging)
+        if: env.ENV == 'staging'
+        run: kustomize build deploy/staging
+
+      - name: Verify Dev Namespace
+        run: kubectl get namespace dev || kubectl create namespace dev
+        if: env.ENV == 'dev'
+
+      - name: Verify Staging Namespace
+        run: kubectl get namespace staging || kubectl create namespace staging
+        if: env.ENV == 'staging'
+
+      - name: Deploy to Kubernetes with Helm
+        if: always()
+        run: |
+          if [ "${{ env.ENV }}" == "dev" ]; then
+            helm upgrade --install myapp ./kustomize -f deploy/dev/release-dev.yaml --debug
+          elif [ "${{ env.ENV }}" == "staging" ]; then
+            helm upgrade --install myapp ./kustomize -f deploy/staging/release-staging.yaml --debug
+          fi
+
+      - name: Check Pods Status (Dev)
+        run: kubectl get pods -n dev
+        if: env.ENV == 'dev'
+
+      - name: Check Pods Status (Staging)
+        run: kubectl get pods -n staging
+        if: env.ENV == 'staging'
