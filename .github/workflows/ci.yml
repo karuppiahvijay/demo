@@ -12,8 +12,8 @@ on:
 
 # Environment variables used across jobs
 env:
-  BACKEND_IMAGE: indhura/backend-image    # Change to your Docker Hub username
-  FRONTEND_IMAGE: indhura/frontend-image   # Change to your Docker Hub username
+  BACKEND_IMAGE: vijay7823/backend-image    # Change to your Docker Hub username
+  FRONTEND_IMAGE: vijay7823/frontend-image   # Change to your Docker Hub username
 
 jobs:
   build:
